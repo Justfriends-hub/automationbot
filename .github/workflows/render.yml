@@ -47,7 +47,7 @@ jobs:
           # Force these regardless of whatever the current default happens to be
           c = re.sub(r'^llm_provider\s*=.*$', 'llm_provider = "gemini"', c, flags=re.M)
           c = re.sub(r'^gemini_api_key\s*=.*$', f'gemini_api_key = "{gemini_key}"', c, flags=re.M)
-          c = re.sub(r'^gemini_model_name\s*=.*$', 'gemini_model_name = "gemini-2.5-flash"', c, flags=re.M)
+          c = re.sub(r'^gemini_model_name\s*=.*$', 'gemini_model_name = "gemini-3.6-flash"', c, flags=re.M)
           c = re.sub(r'^pexels_api_keys\s*=.*$', f'pexels_api_keys = ["{pexels_key}"]', c, flags=re.M)
 
           with open("config.toml", "w") as f:
