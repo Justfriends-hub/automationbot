@@ -2,20 +2,20 @@
   "current_arc": "The Fire Went Out",
   "arc_topic": "The Fire Went Out",
   "total_parts_planned": 4,
-  "next_part": 2,
+  "next_part": 3,
   "world_state": {
     "season": "Late Ice Age winter",
-    "location": "ENV001",
-    "fire": "Ember dropped in snow drift, nearly out",
-    "weather": "Whiteout storm arriving, heavy winds"
+    "location": "ENV005",
+    "fire": "Ember smoldering in bone powder, highly fragile",
+    "weather": "Full blizzard whiteout, freezing conditions"
   },
   "characters": {
-    "Korr": "alive, present",
-    "Nala": "alive, present",
-    "Tarek": "alive, present",
-    "Edda": "alive, not yet appeared"
+    "Korr": "alive, present, leading defense",
+    "Nala": "alive, present, carrying spark basket",
+    "Tarek": "alive, present, spotted wolves",
+    "Edda": "alive, present, advising group"
   },
-  "last_cliffhanger": "The last ember has fallen into deep snow just as a whiteout storm hits, threatening to extinguish their only fire source.",
+  "last_cliffhanger": "A hungry pack of ice wolves blocks the path back to the bone hut while Nala carries the fragile, barely-surviving spark.",
   "storyline_queue": [
     "The Fire Went Out",
     "The Night The Wolves Came",
@@ -29,6 +29,11 @@
     "The Last Mammoth Hunt"
   ],
   "session_log": [
+    {
+      "arc": "The Fire Went Out",
+      "part": 2,
+      "status": "continuing"
+    },
     {
       "arc": "The Fire Went Out",
       "part": 1,
