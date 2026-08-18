@@ -1,246 +1,150 @@
-#!/usr/bin/env python3
 """
-End-to-end: topic -> script (Gemini) -> voice (edge-tts, free) -> stick-figure
-animation (Manim) -> final muxed MP4 with burned-in captions.
-
-Usage:
-  python3 generate_episode.py --topic "The night the fire almost went out"
-
-Env vars required:
-  GEMINI_API_KEY
-Optional:
-  GEMINI_MODEL   (default: gemini-3.6-flash)
-  TTS_VOICE      (default: en-US-AndrewNeural)
+Environment backgrounds per Part C of character-and-style-bible.md.
+Kept simple/flat/graphic per the locked art style — gradient sky, silhouette
+ground shapes, a flickering campfire, and (for the ice shore) wind-streak lines.
 """
 
-import argparse
-import json
-import os
-import re
-import subprocess
-import sys
+from manim import (
+    VGroup, Rectangle, Polygon, Circle, Line, Triangle,
+    ORIGIN, UP, DOWN, LEFT, RIGHT, DEGREES, BLACK,
+)
 
-CHARACTER_BIBLE = """
-Korr  - the steady hunter-provider. Calm, short sentences, protective.
-Nala  - the fire keeper. Quick-witted, blunt, comic timing, fidgets with tools.
-Tarek - the curious teenager. Impulsive, asks the question the viewer is thinking.
-Edda  - the elder. Warm, unhurried, delivers the "real history" teaching payoff.
-"""
+FRAME_W = 4.5   # vertical 9:16 canvas at Manim's default frame height ~8
+FRAME_H = 8.0
 
-POSES = ["idle", "point_right", "point_left", "sit", "gesture_up", "lean_forward"]
-ENVIRONMENTS = ["ENV001", "ENV002", "ENV003", "ENV004", "ENV005"]
-ENV_NAMES = {
-    "ENV001": "Open Ice Shore (outdoor, sunset, wind)",
-    "ENV002": "Bone Hut Interior (indoor, fire pit, mammoth ribs)",
-    "ENV003": "Forest Camp (dense pine treeline, dusk)",
-    "ENV004": "Coastal Cliffs (rocky sea coast, grey overcast)",
-    "ENV005": "Blizzard (whiteout storm, no fire, high danger)",
+
+def fire(position=ORIGIN, scale=1.0):
+    """A simple layered-triangle campfire, flame color locked to warm orange/yellow."""
+    base = Triangle(color="#7A4A2A", fill_color="#7A4A2A", fill_opacity=1).scale(0.25 * scale)
+    flame_outer = Triangle(color="#FF7A1A", fill_color="#FF7A1A", fill_opacity=1).scale(0.22 * scale)
+    flame_inner = Triangle(color="#FFD23F", fill_color="#FFD23F", fill_opacity=1).scale(0.12 * scale)
+    flame_outer.next_to(base, UP, buff=-0.05)
+    flame_inner.next_to(base, UP, buff=0.02)
+    group = VGroup(base, flame_outer, flame_inner).move_to(position)
+    group.flame_parts = VGroup(flame_outer, flame_inner)
+    return group
+
+
+def wind_lines(n=5):
+    """Curved streak lines implying blizzard wind, per style bible."""
+    lines = VGroup()
+    for i in range(n):
+        y = 2.5 - i * 1.0
+        ln = Line(LEFT * FRAME_W + UP * y, LEFT * (FRAME_W - 1.2) + UP * (y + 0.3),
+                  color="#DCE6F0", stroke_width=2, stroke_opacity=0.5)
+        lines.add(ln)
+    return lines
+
+
+def open_ice_shore():
+    """ENV001 — flat frozen coastline, sunset gradient, campfire center, wind lines."""
+    sky = Rectangle(width=FRAME_W * 2, height=FRAME_H, fill_opacity=1, stroke_width=0)
+    sky.set_fill(color=["#3A2A5C", "#C9622E"], opacity=1)  # purple-to-orange gradient approx
+    sky.set_sheen_direction(UP)
+
+    ground = Polygon(
+        LEFT * FRAME_W + DOWN * 1.5, RIGHT * FRAME_W + DOWN * 1.5,
+        RIGHT * FRAME_W + DOWN * 4, LEFT * FRAME_W + DOWN * 4,
+        fill_color="#DCE6F0", fill_opacity=1, stroke_width=0,
+    )
+
+    rocks = VGroup(*[
+        Polygon(ORIGIN, RIGHT * 0.4, UP * 0.3 + RIGHT * 0.2, fill_color="#2A2A2A",
+                fill_opacity=1, stroke_width=0).move_to(LEFT * 2.8 + DOWN * (1.7 + i * 0.1))
+        for i in range(3)
+    ])
+
+    camp_fire = fire(position=DOWN * 1.6, scale=1.2)
+    wind = wind_lines()
+
+    scene = VGroup(sky, ground, rocks, wind, camp_fire)
+    scene.camp_fire = camp_fire
+    return scene
+
+
+def bone_hut_interior():
+    """ENV002 — arched mammoth rib/tusk frame, mounted skulls, central fire pit."""
+    interior = Rectangle(width=FRAME_W * 2, height=FRAME_H, fill_opacity=1, stroke_width=0)
+    interior.set_fill(color="#2A2018", opacity=1)
+
+    ribs = VGroup(*[
+        Line(LEFT * (3.5 - i * 1.5) + DOWN * 3, UP * (2.5 - i * 0.3), color="#C9BBA0", stroke_width=8)
+        for i in range(3)
+    ] + [
+        Line(RIGHT * (3.5 - i * 1.5) + DOWN * 3, UP * (2.5 - i * 0.3), color="#C9BBA0", stroke_width=8)
+        for i in range(3)
+    ])
+
+    skull_l = Circle(radius=0.3, color="#C9BBA0", fill_color="#C9BBA0", fill_opacity=1).move_to(LEFT * 3 + UP * 1)
+    skull_r = Circle(radius=0.3, color="#C9BBA0", fill_color="#C9BBA0", fill_opacity=1).move_to(RIGHT * 3 + UP * 1)
+
+    pit_fire = fire(position=DOWN * 1.8, scale=1.4)
+
+    scene = VGroup(interior, ribs, skull_l, skull_r, pit_fire)
+    scene.camp_fire = pit_fire
+    return scene
+
+
+def forest_camp():
+    """ENV003 — dense pine treeline, dusk, campfire clearing."""
+    sky = Rectangle(width=FRAME_W * 2, height=FRAME_H, fill_opacity=1, stroke_width=0)
+    sky.set_fill(color=["#1E2A3A", "#4A3B2A"], opacity=1)
+    ground = Polygon(
+        LEFT * FRAME_W + DOWN * 1.5, RIGHT * FRAME_W + DOWN * 1.5,
+        RIGHT * FRAME_W + DOWN * 4, LEFT * FRAME_W + DOWN * 4,
+        fill_color="#22301F", fill_opacity=1, stroke_width=0,
+    )
+    trees = VGroup(*[
+        Triangle(fill_color="#0F1A10", fill_opacity=1, stroke_width=0)
+        .scale(0.9 + (i % 3) * 0.2)
+        .move_to(LEFT * FRAME_W + RIGHT * i * 1.1 + UP * (1.5 + (i % 2) * 0.3))
+        for i in range(9)
+    ])
+    camp_fire = fire(position=DOWN * 1.6, scale=1.1)
+    scene = VGroup(sky, trees, ground, camp_fire)
+    scene.camp_fire = camp_fire
+    return scene
+
+
+def coastal_cliffs():
+    """ENV004 — rocky sea coast, grey overcast, waves implied by streak lines."""
+    sky = Rectangle(width=FRAME_W * 2, height=FRAME_H, fill_opacity=1, stroke_width=0)
+    sky.set_fill(color=["#5C6B7A", "#8FA3B0"], opacity=1)
+    sea = Polygon(
+        LEFT * FRAME_W + DOWN * 0.5, RIGHT * FRAME_W + DOWN * 0.5,
+        RIGHT * FRAME_W + DOWN * 4, LEFT * FRAME_W + DOWN * 4,
+        fill_color="#2E4A5C", fill_opacity=1, stroke_width=0,
+    )
+    wave_lines = VGroup(*[
+        Line(LEFT * FRAME_W + DOWN * (0.7 + i * 0.5), RIGHT * FRAME_W + DOWN * (0.7 + i * 0.5),
+             color="#AFC4CE", stroke_width=2, stroke_opacity=0.4)
+        for i in range(4)
+    ])
+    cliff = Polygon(LEFT * FRAME_W, LEFT * 1.5, LEFT * 1.0 + DOWN * 2, LEFT * FRAME_W + DOWN * 2,
+                     fill_color="#3A3A3A", fill_opacity=1, stroke_width=0)
+    camp_fire = fire(position=DOWN * 1.4 + RIGHT * 0.5, scale=1.0)
+    scene = VGroup(sky, sea, wave_lines, cliff, camp_fire)
+    scene.camp_fire = camp_fire
+    return scene
+
+
+def blizzard_open():
+    """ENV005 — whiteout storm, heavy wind lines, low visibility, no fire (danger state)."""
+    sky = Rectangle(width=FRAME_W * 2, height=FRAME_H, fill_opacity=1, stroke_width=0)
+    sky.set_fill(color="#C7D2DB", opacity=1)
+    ground = Rectangle(width=FRAME_W * 2, height=3, fill_color="#DCE6F0", fill_opacity=1, stroke_width=0)
+    ground.to_edge(DOWN, buff=-1)
+    heavy_wind = wind_lines(n=9)
+    scene = VGroup(sky, ground, heavy_wind)
+    scene.camp_fire = fire(position=DOWN * 10, scale=0.01)  # off-screen placeholder, no fire in a storm
+    scene.add(scene.camp_fire)
+    return scene
+
+
+ENVIRONMENTS = {
+    "ENV001": open_ice_shore,
+    "ENV002": bone_hut_interior,
+    "ENV003": forest_camp,
+    "ENV004": coastal_cliffs,
+    "ENV005": blizzard_open,
 }
-LEDGER_PATH = "ledger.json"
-
-
-def load_ledger() -> dict:
-    if os.path.exists(LEDGER_PATH):
-        with open(LEDGER_PATH) as f:
-            return json.load(f)
-    raise FileNotFoundError(
-        "ledger.json not found in repo root — this is the show's memory. "
-        "Add the seed ledger.json before running."
-    )
-
-
-def save_ledger(ledger: dict):
-    with open(LEDGER_PATH, "w") as f:
-        json.dump(ledger, f, indent=2)
-
-
-def call_gemini(ledger: dict) -> dict:
-    import urllib.request
-
-    api_key = os.environ["GEMINI_API_KEY"]
-    model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-
-    arc_topic = ledger["current_arc"] or ledger["storyline_queue"][0]
-    part_number = ledger["next_part"]
-    env_options = "\n".join(f"  {k} = {v}" for k, v in ENV_NAMES.items())
-
-    prompt = f"""You are the showrunner for "Survive History," an Ice Age survival stick-figure
-Short series. You reason about story continuity — you decide when a Part continues the
-current Arc and when an Arc wraps up, exactly like a real showrunner tracking a season.
-
-Locked cast:
-{CHARACTER_BIBLE}
-
-Environments available (pick the one that fits this Part's scene):
-{env_options}
-
-CURRENT SHOW STATE (this is memory — respect it, don't contradict it):
-- Arc topic: "{arc_topic}"
-- This is Part {part_number} of a planned {ledger['total_parts_planned']}-part arc
-- World state: {json.dumps(ledger['world_state'])}
-- Characters: {json.dumps(ledger['characters'])}
-- Last cliffhanger to pay off: {ledger['last_cliffhanger'] or "none, this is Part 1"}
-
-Write this next Part: 6-8 short shots (each ~8-15 words, punchy short-form pace),
-at least 2 different characters, opens on danger/tension, ends on a cliffhanger UNLESS
-this Part number equals the planned total parts, in which case wrap the Arc with a
-satisfying resolution + tease the next Arc instead.
-
-Return ONLY valid JSON, no markdown fences, no commentary, in exactly this schema:
-{{
-  "environment": "one of {ENVIRONMENTS}",
-  "shots": [
-    {{"character": "Korr|Nala|Tarek|Edda", "pose": "one of {POSES}", "line": "spoken line", "caption": "same or shortened"}}
-  ],
-  "arc_status": "continuing" or "arc_complete",
-  "cliffhanger": "one sentence describing what the NEXT part must pay off (empty string if arc_complete)",
-  "world_state_updates": {{"season": "...", "location": "ENV00X", "fire": "...", "weather": "..."}},
-  "character_updates": {{"Korr": "...", "Nala": "...", "Tarek": "...", "Edda": "..."}}
-}}"""
-
-    body = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
-    req = urllib.request.Request(url, data=body, headers={"content-type": "application/json"})
-    with urllib.request.urlopen(req) as resp:
-        data = json.loads(resp.read())
-
-    text = data["candidates"][0]["content"]["parts"][0]["text"]
-    text = re.sub(r"^```json|```$", "", text.strip(), flags=re.M).strip()
-    episode = json.loads(text)
-
-    if episode.get("environment") not in ENVIRONMENTS:
-        episode["environment"] = ledger["world_state"]["location"]
-
-    episode["_arc_topic"] = arc_topic
-    episode["_part_number"] = part_number
-    return episode
-
-
-def update_ledger(ledger: dict, episode: dict) -> dict:
-    if episode["arc_status"] == "arc_complete":
-        finished_topic = episode["_arc_topic"]
-        remaining_queue = [t for t in ledger["storyline_queue"] if t != finished_topic]
-        ledger["current_arc"] = remaining_queue[0] if remaining_queue else None
-        ledger["storyline_queue"] = remaining_queue
-        ledger["next_part"] = 1
-        ledger["last_cliffhanger"] = None
-    else:
-        ledger["current_arc"] = episode["_arc_topic"]
-        ledger["next_part"] = episode["_part_number"] + 1
-        ledger["last_cliffhanger"] = episode.get("cliffhanger", "")
-
-    ledger["world_state"].update(episode.get("world_state_updates", {}))
-    ledger["characters"].update(episode.get("character_updates", {}))
-    ledger["session_log"].insert(0, {
-        "arc": episode["_arc_topic"],
-        "part": episode["_part_number"],
-        "status": episode["arc_status"],
-    })
-    return ledger
-
-
-def synthesize_voice(episode: dict, workdir: str) -> list:
-    voice = os.environ.get("TTS_VOICE", "en-US-AndrewNeural")
-    timing = []
-    clip_paths = []
-
-    for i, shot in enumerate(episode["shots"]):
-        mp3_path = os.path.join(workdir, f"shot_{i}.mp3")
-        subprocess.run(
-            ["edge-tts", "--voice", voice, "--text", shot["line"], "--write-media", mp3_path],
-            check=True,
-        )
-        duration = float(subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", mp3_path],
-            check=True, capture_output=True, text=True,
-        ).stdout.strip())
-        timing.append({"shot_index": i, "duration": round(duration + 0.4, 2)})  # pad for breathing room
-        clip_paths.append(mp3_path)
-
-    return timing, clip_paths
-
-
-def concat_audio(clip_paths: list, workdir: str) -> str:
-    list_path = os.path.join(workdir, "concat_list.txt")
-    with open(list_path, "w") as f:
-        for p in clip_paths:
-            f.write(f"file '{os.path.abspath(p)}'\n")
-    out_path = os.path.join(workdir, "narration.mp3")
-    subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", out_path],
-        check=True, capture_output=True,
-    )
-    return out_path
-
-
-def render_manim(config_path: str, timing_path: str, workdir: str) -> str:
-    env = os.environ.copy()
-    env["EPISODE_CONFIG"] = os.path.abspath(config_path)
-    env["EPISODE_TIMING"] = os.path.abspath(timing_path)
-
-    subprocess.run(
-        ["manim", "-qm", "survive_history_scene.py", "Episode", "--media_dir", os.path.join(workdir, "media")],
-        cwd="survive_history", env=env, check=True,
-    )
-
-    media_dir = os.path.join(workdir, "media", "videos", "survive_history_scene", "720p30")
-    for f in os.listdir(media_dir):
-        if f.endswith(".mp4"):
-            return os.path.join(media_dir, f)
-    raise FileNotFoundError("Manim did not produce an mp4")
-
-
-def mux_final(video_path: str, audio_path: str, out_path: str):
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", video_path, "-i", audio_path,
-         "-c:v", "copy", "-c:a", "aac", "-shortest", out_path],
-        check=True, capture_output=True,
-    )
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--outdir", default="output")
-    args = parser.parse_args()
-
-    os.makedirs(args.outdir, exist_ok=True)
-
-    print("→ Reading show ledger (memory)...")
-    ledger = load_ledger()
-    print(f"  Arc: {ledger['current_arc'] or ledger['storyline_queue'][0]} | Part {ledger['next_part']}")
-
-    print("→ Generating next Part with Gemini (arc-aware)...")
-    episode = call_gemini(ledger)
-    print(f"  {len(episode['shots'])} shots, environment {episode['environment']}, status: {episode['arc_status']}")
-
-    config_path = os.path.join(args.outdir, "config.json")
-    with open(config_path, "w") as f:
-        json.dump(episode, f, indent=2)
-
-    print("→ Synthesizing voice (edge-tts)...")
-    timing, clip_paths = synthesize_voice(episode, args.outdir)
-    timing_path = os.path.join(args.outdir, "audio_timing.json")
-    with open(timing_path, "w") as f:
-        json.dump(timing, f, indent=2)
-
-    print("→ Concatenating narration track...")
-    narration_path = concat_audio(clip_paths, args.outdir)
-
-    print("→ Rendering stick-figure animation with Manim...")
-    video_path = render_manim(config_path, timing_path, args.outdir)
-
-    print("→ Muxing final video...")
-    final_path = os.path.join(args.outdir, "final_stickman.mp4")
-    mux_final(video_path, narration_path, final_path)
-
-    print("→ Updating ledger (show memory) for next run...")
-    ledger = update_ledger(ledger, episode)
-    save_ledger(ledger)
-
-    print(f"\nDONE: {final_path}")
-    print(f"Next run will continue from: {ledger['current_arc']}, Part {ledger['next_part']}")
-
-
-if __name__ == "__main__":
-    sys.exit(main())
