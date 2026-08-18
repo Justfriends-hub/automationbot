@@ -1,0 +1,55 @@
+name: Render Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Video topic'
+        required: true
+        default: 'Why interest rates affect everyday prices'
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install ffmpeg and imagemagick
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Clone MoneyPrinterTurbo
+        run: git clone --depth 1 https://github.com/harry0703/MoneyPrinterTurbo.git mpt
+
+      - name: Install dependencies
+        working-directory: mpt
+        run: pip install -r requirements.txt
+
+      - name: Build config.toml
+        working-directory: mpt
+        run: |
+          cp config.example.toml config.toml
+          python3 - <<'PY'
+          import re
+          with open("config.toml") as f:
+              c = f.read()
+          c = c.replace('llm_provider = "openai"', 'llm_provider = "gemini"')
+          c = c.replace('gemini_api_key = ""', f'gemini_api_key = "${{ secrets.GEMINI_API_KEY }}"')
+          c = c.replace('pexels_api_keys = []', f'pexels_api_keys = ["${{ secrets.PEXELS_API_KEY }}"]')
+          with open("config.toml", "w") as f:
+              f.write(c)
+          PY
+
+      - name: Generate video
+        working-directory: mpt
+        run: python cli.py --video-subject "${{ github.event.inputs.topic }}"
+
+      - name: Upload result as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-video
+          path: mpt/storage/tasks/**/*.mp4
+          retention-days: 7
