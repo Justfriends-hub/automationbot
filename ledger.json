@@ -1,23 +1,32 @@
 {
-  "episodes": [
-    {
-      "id": "episode_001",
-      "title": "The Fall of Rome",
-      "date_created": "2026-08-18",
-      "status": "draft",
-      "characters": ["Korr", "Nala", "Tarek", "Edda"],
-      "environment": "ENV001",
-      "shot_count": 4,
-      "duration_seconds": 12,
-      "notes": "First test episode with campfire setting"
-    }
-  ],
-  "character_usage": {
-    "Korr": 2,
-    "Nala": 1,
-    "Tarek": 1,
-    "Edda": 1
+  "current_arc": null,
+  "arc_topic": "The Fire Went Out",
+  "total_parts_planned": 4,
+  "next_part": 1,
+  "world_state": {
+    "season": "Late Ice Age winter",
+    "location": "ENV001",
+    "fire": "Central campfire, burning low",
+    "weather": "Clear, cold, dusk, wind picking up"
   },
-  "total_episodes": 1,
-  "total_shorts_generated": 4
+  "characters": {
+    "Korr": "alive, present",
+    "Nala": "alive, present",
+    "Tarek": "alive, present",
+    "Edda": "alive, not yet appeared"
+  },
+  "last_cliffhanger": null,
+  "storyline_queue": [
+    "The Fire Went Out",
+    "The Night The Wolves Came",
+    "How They Slept at -30C",
+    "The Mammoth Hunt That Went Wrong",
+    "When the Food Ran Out",
+    "Lost in the Snow",
+    "Bone Houses",
+    "The Sabertooth Reality",
+    "The Children Who Had to Survive",
+    "The Last Mammoth Hunt"
+  ],
+  "session_log": []
 }
