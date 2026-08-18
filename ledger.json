@@ -1,13 +1,13 @@
 {
-  "current_arc": null,
+  "current_arc": "The Fire Went Out",
   "arc_topic": "The Fire Went Out",
   "total_parts_planned": 4,
-  "next_part": 1,
+  "next_part": 2,
   "world_state": {
     "season": "Late Ice Age winter",
     "location": "ENV001",
-    "fire": "Central campfire, burning low",
-    "weather": "Clear, cold, dusk, wind picking up"
+    "fire": "Ember dropped in snow drift, nearly out",
+    "weather": "Whiteout storm arriving, heavy winds"
   },
   "characters": {
     "Korr": "alive, present",
@@ -15,7 +15,7 @@
     "Tarek": "alive, present",
     "Edda": "alive, not yet appeared"
   },
-  "last_cliffhanger": null,
+  "last_cliffhanger": "The last ember has fallen into deep snow just as a whiteout storm hits, threatening to extinguish their only fire source.",
   "storyline_queue": [
     "The Fire Went Out",
     "The Night The Wolves Came",
@@ -28,5 +28,11 @@
     "The Children Who Had to Survive",
     "The Last Mammoth Hunt"
   ],
-  "session_log": []
+  "session_log": [
+    {
+      "arc": "The Fire Went Out",
+      "part": 1,
+      "status": "continuing"
+    }
+  ]
 }
