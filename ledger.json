@@ -1,0 +1,23 @@
+{
+  "episodes": [
+    {
+      "id": "episode_001",
+      "title": "The Fall of Rome",
+      "date_created": "2026-08-18",
+      "status": "draft",
+      "characters": ["Korr", "Nala", "Tarek", "Edda"],
+      "environment": "ENV001",
+      "shot_count": 4,
+      "duration_seconds": 12,
+      "notes": "First test episode with campfire setting"
+    }
+  ],
+  "character_usage": {
+    "Korr": 2,
+    "Nala": 1,
+    "Tarek": 1,
+    "Edda": 1
+  },
+  "total_episodes": 1,
+  "total_shorts_generated": 4
+}
