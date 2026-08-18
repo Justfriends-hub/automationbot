@@ -1,0 +1,48 @@
+name: Render Stickman Episode
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (Manim + ffmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config python3-dev
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install manim edge-tts
+
+      - name: Generate next episode (ledger-driven)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 generate_episode.py
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: stickman-episode
+          path: output/final_stickman.mp4
+          retention-days: 7
+
+      - name: Commit updated ledger back to repo
+        run: |
+          git config user.name "survive-history-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add ledger.json
+          git diff --staged --quiet || git commit -m "Update show ledger [skip ci]"
+          git push
