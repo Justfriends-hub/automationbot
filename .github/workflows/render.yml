@@ -30,17 +30,33 @@ jobs:
 
       - name: Build config.toml
         working-directory: mpt
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
           cp config.example.toml config.toml
           python3 - <<'PY'
-          import re
+          import re, os
+
           with open("config.toml") as f:
               c = f.read()
-          c = c.replace('llm_provider = "openai"', 'llm_provider = "gemini"')
-          c = c.replace('gemini_api_key = ""', f'gemini_api_key = "${{ secrets.GEMINI_API_KEY }}"')
-          c = c.replace('pexels_api_keys = []', f'pexels_api_keys = ["${{ secrets.PEXELS_API_KEY }}"]')
+
+          gemini_key = os.environ["GEMINI_KEY"]
+          pexels_key = os.environ["PEXELS_KEY"]
+
+          # Force these regardless of whatever the current default happens to be
+          c = re.sub(r'^llm_provider\s*=.*$', 'llm_provider = "gemini"', c, flags=re.M)
+          c = re.sub(r'^gemini_api_key\s*=.*$', f'gemini_api_key = "{gemini_key}"', c, flags=re.M)
+          c = re.sub(r'^pexels_api_keys\s*=.*$', f'pexels_api_keys = ["{pexels_key}"]', c, flags=re.M)
+
           with open("config.toml", "w") as f:
               f.write(c)
+
+          # Sanity check: fail fast in logs if something didn't stick
+          assert 'llm_provider = "gemini"' in c
+          assert gemini_key in c
+          assert pexels_key in c
+          print("config.toml patched OK")
           PY
 
       - name: Generate video
