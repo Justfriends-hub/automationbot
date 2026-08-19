@@ -1,0 +1,51 @@
+name: Render Documentary
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install edge-tts
+
+      - name: Generate documentary
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        working-directory: documentary
+        run: python3 generate_documentary.py
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentary-video
+          path: |
+            documentary/output/final_documentary.mp4
+            documentary/output/thumbnail.jpg
+          retention-days: 7
+
+      - name: Commit updated topic queue back to repo
+        run: |
+          git config user.name "documentary-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add documentary/topics_queue.json
+          git diff --staged --quiet || git commit -m "Mark topic as used [skip ci]"
+          git push
