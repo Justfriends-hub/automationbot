@@ -164,7 +164,9 @@ def search_pixabay(query: str) -> str | None:
 
 
 def download(url: str, out_path: str):
-    urllib.request.urlretrieve(url, out_path)
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; DocumentaryBot/1.0)"})
+    with urllib.request.urlopen(req, timeout=60) as resp, open(out_path, "wb") as f:
+        f.write(resp.read())
 
 
 def fetch_clip_for_scene(query: str, workdir: str, index: int) -> str:
