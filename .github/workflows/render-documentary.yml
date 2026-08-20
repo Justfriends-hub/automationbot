@@ -25,11 +25,32 @@ jobs:
       - name: Install Python dependencies
         run: pip install edge-tts
 
+      # ---- NEW: automatically fetch free cinematic background music ----
+      - name: Download background music
+        working-directory: documentary
+        run: |
+          # Only download if you haven't placed your own background_music.mp3 in the repo
+          if [ ! -f background_music.mp3 ]; then
+            echo "⬇️ Downloading free cinematic ambient track (Pixabay CC0)..."
+            curl -L -o background_music.mp3 \
+              "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=emotional-cinematic-ambient-116199.mp3" \
+              --user-agent "Mozilla/5.0" --max-time 30 || echo "⚠️ Music download failed – skipping (script will continue without it)."
+          else
+            echo "✅ Using existing background_music.mp3 from repo."
+          fi
+
       - name: Generate documentary
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+
+          # ---- NEW: choose the best free TTS voice ----
+          TTS_VOICE: "en-US-ChristopherNeural"
+
+          # ---- NEW: apply a unified cinematic colour grade ----
+          DOCUMENTARY_STYLE: "warm"   # options: warm, cold, vintage, high_contrast
+
         working-directory: documentary
         run: python3 generate_documentary.py
 
