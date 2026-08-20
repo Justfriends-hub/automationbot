@@ -61,11 +61,13 @@ each, ~10-16 words, narrative pacing: hook in scene 1, curiosity gap by scene 3,
 build tension, resolve by the final scene). Historically accurate, no invented
 quotes or fabricated statistics.
 
-For each scene also give a short (2-4 word) STOCK FOOTAGE search query — generic,
-concrete, and visual (e.g. "old naval ship", "wartime telegraph office", "stormy
-ocean waves") so it can be matched against real stock video libraries. Do not put
+For each scene also give a short (3-6 word) STOCK FOOTAGE search query. Make it as
+SPECIFIC and VISUALLY DISTINCTIVE as possible while still being a real, common stock
+subject — avoid generic filler like "old machine" or "dark room"; prefer something
+like "morse code operator hands closeup" or "1940s naval codebreaking room" so the
+matched footage actually looks intentional rather than randomly generic. Do not put
 named people or specific proper nouns in the search query, since stock libraries
-won't have them — describe the visual mood/setting instead.
+won't have them — describe the visual mood/setting/era instead.
 
 Return ONLY valid JSON, no markdown fences, no commentary, in exactly this schema:
 {{
@@ -133,10 +135,15 @@ def search_pexels(query: str) -> str | None:
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-    except Exception:
+    except urllib.error.HTTPError as e:
+        print(f"    [Pexels HTTPError {e.code}] {e.read().decode(errors='replace')[:200]}")
+        return None
+    except Exception as e:
+        print(f"    [Pexels error] {type(e).__name__}: {e}")
         return None
     videos = data.get("videos", [])
     if not videos:
+        print(f"    [Pexels] 0 results for '{query}'")
         return None
     files = sorted(videos[0]["video_files"], key=lambda f: f.get("width", 0), reverse=True)
     for f in files:
@@ -147,14 +154,16 @@ def search_pexels(query: str) -> str | None:
 
 def search_pixabay(query: str) -> str | None:
     api_key = os.environ["PIXABAY_API_KEY"]
-    url = f"https://pixabay.com/api/videos/?key={api_key}&q={urllib.parse.quote(query)}&per_page=3"
+    url = f"https://pixabay.com/api/videos/?key={api_key}&q={urllib.parse.quote(query)}&per_page=6"
     try:
         with urllib.request.urlopen(url, timeout=15) as resp:
             data = json.loads(resp.read())
-    except Exception:
+    except Exception as e:
+        print(f"    [Pixabay error] {type(e).__name__}: {e}")
         return None
     hits = data.get("hits", [])
     if not hits:
+        print(f"    [Pixabay] 0 results for '{query}'")
         return None
     videos = hits[0]["videos"]
     for size in ("medium", "small", "large", "tiny"):
