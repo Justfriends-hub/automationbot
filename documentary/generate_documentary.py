@@ -4,13 +4,20 @@ End-to-end: topic -> documentary script + scene breakdown (Gemini) ->
 voice (edge-tts, free) -> matching stock clips (Pexels + Pixabay, free APIs) ->
 ffmpeg assembly with burned-in captions -> thumbnail.
 
+Enhanced for free cinematic quality:
+- Gemini prompt asks for detailed scene descriptions and a unified style.
+- Post-processing adds a film look (colour grade, vignette, slight grain).
+- Optional background music (if a file called "background_music.mp3" exists).
+- Improved TTS voice (default: en-US-ChristopherNeural, set via TTS_VOICE).
+
 Env vars required:
   GEMINI_API_KEY
   PEXELS_API_KEY
   PIXABAY_API_KEY
 Optional:
   GEMINI_MODEL   (default: gemini-3.6-flash)
-  TTS_VOICE      (default: en-US-AndrewNeural)
+  TTS_VOICE      (default: en-US-ChristopherNeural)
+  DOCUMENTARY_STYLE  (e.g. "warm sepia" or "cold blue", default: "cinematic warm")
 """
 
 import json
@@ -24,19 +31,18 @@ import urllib.parse
 import urllib.request
 
 TOPICS_PATH = "topics_queue.json"
+BACKGROUND_MUSIC = "background_music.mp3"   # optional, place in the same directory
 
 
-# ---------- topic queue (lightweight persistence, same pattern as the ledger) ----------
+# ---------- topic queue ----------
 
 def load_topics() -> dict:
     with open(TOPICS_PATH) as f:
         return json.load(f)
 
-
 def save_topics(state: dict):
     with open(TOPICS_PATH, "w") as f:
         json.dump(state, f, indent=2)
-
 
 def pick_topic(state: dict) -> str:
     available = [t for t in state["topic_queue"] if t not in state["used_topics"]]
@@ -53,27 +59,31 @@ def call_gemini(topic: str) -> dict:
     model = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
-    prompt = f"""You are a cinematic historical documentary scriptwriter for a 60-second
-YouTube Short. Topic: "{topic}"
+    # We ask for a unified style and detailed visual descriptions.
+    prompt = f"""You are a cinematic historical documentary scriptwriter for a 60‑second YouTube Short. Topic: "{topic}"
 
-Write a documentary-style voiceover broken into 10-12 short scenes (one sentence
-each, ~10-16 words, narrative pacing: hook in scene 1, curiosity gap by scene 3,
-build tension, resolve by the final scene). Historically accurate, no invented
-quotes or fabricated statistics.
+Write a documentary‑style voiceover broken into 10–12 short scenes (one sentence each, ~10–16 words).
+- Scene 1: hook
+- Scenes 2–3: curiosity gap
+- Build tension through the middle
+- Scene final: resolution
 
-For each scene also give a short (3-6 word) STOCK FOOTAGE search query. Make it as
-SPECIFIC and VISUALLY DISTINCTIVE as possible while still being a real, common stock
-subject — avoid generic filler like "old machine" or "dark room"; prefer something
-like "morse code operator hands closeup" or "1940s naval codebreaking room" so the
-matched footage actually looks intentional rather than randomly generic. Do not put
-named people or specific proper nouns in the search query, since stock libraries
-won't have them — describe the visual mood/setting/era instead.
+For each scene also provide:
+- A SPECIFIC STOCK FOOTAGE SEARCH QUERY (2–6 words) that will return real, relevant clips.
+- A DETAILED VISUAL DESCRIPTION (mood, lighting, camera angle, colour palette) to guide post‑processing and to help find matching clips.
 
-Return ONLY valid JSON, no markdown fences, no commentary, in exactly this schema:
+Also choose a UNIFIED CINEMATIC STYLE for the whole documentary (e.g. "warm sepia", "cold blue", "high contrast noir") – this will be applied globally.
+
+Return ONLY valid JSON, no markdown, in this exact schema:
 {{
-  "title": "short punchy YouTube title, under 60 characters",
+  "title": "short YouTube title under 60 chars",
+  "style": "one word or short phrase describing the overall look",
   "scenes": [
-    {{"narration": "one sentence of voiceover", "visual_query": "2-4 word stock search"}}
+    {{
+      "narration": "one sentence of voiceover",
+      "visual_query": "2‑6 word stock search",
+      "visual_description": "detailed description of lighting, mood, angle, colours"
+    }}
   ]
 }}"""
 
@@ -102,10 +112,10 @@ Return ONLY valid JSON, no markdown fences, no commentary, in exactly this schem
     return json.loads(text)
 
 
-# ---------- voice ----------
+# ---------- voice (edge-tts) ----------
 
 def synthesize_voice(script: dict, workdir: str) -> list:
-    voice = os.environ.get("TTS_VOICE", "en-US-AndrewNeural")
+    voice = os.environ.get("TTS_VOICE", "en-US-ChristopherNeural")  # more natural than Andrew
     timing = []
     clip_paths = []
 
@@ -135,22 +145,17 @@ def search_pexels(query: str) -> str | None:
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        print(f"    [Pexels HTTPError {e.code}] {e.read().decode(errors='replace')[:200]}")
-        return None
     except Exception as e:
         print(f"    [Pexels error] {type(e).__name__}: {e}")
         return None
     videos = data.get("videos", [])
     if not videos:
-        print(f"    [Pexels] 0 results for '{query}'")
         return None
     files = sorted(videos[0]["video_files"], key=lambda f: f.get("width", 0), reverse=True)
     for f in files:
         if f.get("width", 0) <= 1080:
             return f["link"]
     return files[-1]["link"] if files else None
-
 
 def search_pixabay(query: str) -> str | None:
     api_key = os.environ["PIXABAY_API_KEY"]
@@ -163,7 +168,6 @@ def search_pixabay(query: str) -> str | None:
         return None
     hits = data.get("hits", [])
     if not hits:
-        print(f"    [Pixabay] 0 results for '{query}'")
         return None
     videos = hits[0]["videos"]
     for size in ("medium", "small", "large", "tiny"):
@@ -171,30 +175,25 @@ def search_pixabay(query: str) -> str | None:
             return videos[size]["url"]
     return None
 
-
 def download(url: str, out_path: str):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; DocumentaryBot/1.0)"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (DocumentaryBot/1.0)"})
     with urllib.request.urlopen(req, timeout=60) as resp, open(out_path, "wb") as f:
         f.write(resp.read())
-
 
 def fetch_clip_for_scene(query: str, workdir: str, index: int) -> str:
     out_path = os.path.join(workdir, f"clip_{index}.mp4")
 
     link = search_pexels(query)
-    source = "Pexels"
     if not link:
         link = search_pixabay(query)
-        source = "Pixabay"
     if not link:
-        # last resort: broaden the query to one generic word so we always get *something*
-        link = search_pexels(query.split()[0]) or search_pixabay(query.split()[0])
-        source = "fallback"
+        # fallback: split query and try first word
+        first_word = query.split()[0]
+        link = search_pexels(first_word) or search_pixabay(first_word)
+        if not link:
+            raise RuntimeError(f"No stock clip found for query: '{query}' (tried Pexels + Pixabay)")
 
-    if not link:
-        raise RuntimeError(f"No stock clip found for query: '{query}' (tried Pexels + Pixabay)")
-
-    print(f"  scene {index}: '{query}' -> {source}")
+    print(f"  scene {index}: '{query}' -> found")
     download(link, out_path)
     return out_path
 
@@ -202,13 +201,12 @@ def fetch_clip_for_scene(query: str, workdir: str, index: int) -> str:
 # ---------- assembly ----------
 
 def normalize_clip(src: str, duration: float, out_path: str):
-    """Scale/crop to 1080x1920, trim or loop to match narration duration, strip audio."""
+    """Scale/crop to 1080x1920, trim/loop to duration, strip audio."""
     subprocess.run([
         "ffmpeg", "-y", "-stream_loop", "-1", "-i", src, "-t", str(duration),
         "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
         "-an", out_path,
     ], check=True, capture_output=True)
-
 
 def build_srt(script: dict, timing: list, out_path: str):
     lines = []
@@ -224,14 +222,12 @@ def build_srt(script: dict, timing: list, out_path: str):
     with open(out_path, "w") as f:
         f.write("\n".join(lines))
 
-
 def _srt_ts(seconds: float) -> str:
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
     ms = int((seconds - int(seconds)) * 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
 
 def concat_clips(clip_paths: list, workdir: str) -> str:
     list_path = os.path.join(workdir, "clips_list.txt")
@@ -244,7 +240,6 @@ def concat_clips(clip_paths: list, workdir: str) -> str:
         "-c", "copy", out_path,
     ], check=True, capture_output=True)
     return out_path
-
 
 def concat_audio(clip_paths: list, workdir: str) -> str:
     list_path = os.path.join(workdir, "audio_list.txt")
@@ -259,14 +254,69 @@ def concat_audio(clip_paths: list, workdir: str) -> str:
     return out_path
 
 
+# ---------- cinematic post‑processing ----------
+
+def apply_cinematic_grade(input_video: str, output_video: str, style: str = "warm"):
+    """
+    Apply colour grading, vignette, and light film grain using ffmpeg.
+    style can be "warm", "cold", "vintage", or "high_contrast".
+    """
+    # Define colour matrix adjustments
+    matrices = {
+        "warm": "0.9:0.1:0:0:0.1:0.9:0:0:0:0:1:0",  # push reds/greens
+        "cold": "0.7:0:0.3:0:0:0.8:0.2:0:0:0:1:0",   # push blues
+        "vintage": "0.6:0.2:0.2:0:0.2:0.6:0.2:0:0.2:0.2:0.6:0",
+        "high_contrast": "1.2:0:0:0:0:1.2:0:0:0:0:1.2:0.1"
+    }
+    matrix = matrices.get(style.lower(), matrices["warm"])
+
+    # Vignette: darken edges with a radial gradient
+    vignette_filter = (
+        "vignette=PI/4"   # simple vignette
+    )
+
+    # Film grain: add a small amount of noise
+    grain_filter = "noise=alls=2:allf=t+u"
+
+    filter_chain = (
+        f"colorchannelmixer={matrix},"
+        f"{vignette_filter},"
+        f"{grain_filter}"
+    )
+
+    cmd = [
+        "ffmpeg", "-y", "-i", input_video,
+        "-vf", filter_chain,
+        "-c:a", "copy",   # keep audio untouched
+        output_video
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+
+def add_background_music(video_path: str, music_path: str, output_path: str, volume: float = 0.12):
+    """
+    Mix background music at low volume (12%) with the existing audio.
+    """
+    cmd = [
+        "ffmpeg", "-y", "-i", video_path, "-i", music_path,
+        "-filter_complex", f"[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=2,volume={volume}[a]",
+        "-map", "0:v", "-map", "[a]", "-c:v", "copy",
+        output_path
+    ]
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
+# ---------- final mux with captions ----------
+
 def mux_final(video_path: str, audio_path: str, srt_path: str, out_path: str):
-    style = "FontSize=14,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Alignment=2,MarginV=80"
+    style = "FontSize=16,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=2,Alignment=2,MarginV=80"
     subprocess.run([
         "ffmpeg", "-y", "-i", video_path, "-i", audio_path,
         "-vf", f"subtitles={srt_path}:force_style='{style}'",
         "-c:v", "libx264", "-c:a", "aac", "-shortest", out_path,
     ], check=True, capture_output=True)
 
+
+# ---------- thumbnail ----------
 
 def make_thumbnail(video_path: str, title: str, out_path: str):
     frame_path = out_path.replace(".jpg", "_frame.jpg")
@@ -297,7 +347,8 @@ def main():
 
     print("→ Generating script + scene breakdown with Gemini...")
     script = call_gemini(topic)
-    print(f"  Title: {script['title']} | {len(script['scenes'])} scenes")
+    style = script.get("style", "warm")
+    print(f"  Title: {script['title']} | {len(script['scenes'])} scenes | style: {style}")
 
     print("→ Synthesizing voice (edge-tts)...")
     timing, voice_clips = synthesize_voice(script, outdir)
@@ -322,8 +373,22 @@ def main():
     audio_path = concat_audio(voice_clips, outdir)
 
     print("→ Muxing final video with burned-in captions...")
+    temp_mux = os.path.join(outdir, "temp_mux.mp4")
+    mux_final(video_path, audio_path, srt_path, temp_mux)
+
+    # --- Post-processing: cinematic look ---
+    print(f"→ Applying cinematic grade (style: {style})...")
+    graded_video = os.path.join(outdir, "graded.mp4")
+    apply_cinematic_grade(temp_mux, graded_video, style)
+
+    # --- Optional background music ---
     final_path = os.path.join(outdir, "final_documentary.mp4")
-    mux_final(video_path, audio_path, srt_path, final_path)
+    if os.path.exists(BACKGROUND_MUSIC):
+        print("→ Mixing in background music...")
+        add_background_music(graded_video, BACKGROUND_MUSIC, final_path)
+    else:
+        # just rename graded to final
+        os.rename(graded_video, final_path)
 
     print("→ Making thumbnail...")
     thumb_path = os.path.join(outdir, "thumbnail.jpg")
@@ -336,7 +401,6 @@ def main():
     print(f"\nDONE: {final_path}")
     print(f"Thumbnail: {thumb_path}")
     print(f"Title: {script['title']}")
-
 
 if __name__ == "__main__":
     sys.exit(main())
